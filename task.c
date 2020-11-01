@@ -3,6 +3,9 @@
 передаем в консоли названия двух файлов
 первый - файл, куда запишем строку
 второй - файл, куда скопируем строку из первого
+
+записывается /00 в конце?
+valgrind ./task a.txt b.txt - проверка на утекчки памяти
 */
 
 #include <stdio.h>
@@ -15,8 +18,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-const int SIZE = 20;
-const int BUF_SIZE = 100;
+const int BUF_SIZE = 6;
 
 /*
 Создадает файл с возможностью записи.
@@ -54,7 +56,7 @@ int main(int argc, char* argv[])
 
     if ( write( file1_des, str, 17) == -1 )
     {
-        fprintf ( stderr, "Не удалось записать строку в файл\n" );
+        fprintf ( stderr, "1.Не удалось записать строку в файл\n" );
         exit (1);
     }
 
@@ -70,19 +72,50 @@ int main(int argc, char* argv[])
     //Заполним структуру информации о 1 файле (необходим размер первого файла)
     if ( fstat ( file1_des, &file_stat ) == -1 )
     {
-        assert ("fstat file error");
+        assert ("fstat file error\n");
     }
 
-    off_t offset = 0; //считываем file1 сначала;
-    if ( sendfile ( file2_des, file1_des, &offset, file_stat.st_size ) == -1 )
+    int size = file_stat.st_size;
+    
+    char *buffer = (char *) calloc ( size + 1, sizeof(char) );//массив для записи с файла.
+
+    if ( read( file1_des, buffer, size ) != size )
     {
-        assert ("sendfile error");
+        assert ( "Impossible to read" );
+    }
+    if ( write( file2_des, buffer, size) == -1 )
+    {
+        fprintf ( stderr, "2.Не удалось записать строку в файл\n" );
+        exit (1);
     }
 
     printf ( "Пересылка из файла %s в файл %s прошла успешно.\n", file1_name, file2_name );
 
+    /*
+    Продемонстрируем, что read и write смещают указатели при файловой обработке:
+    при повторной записи в file2 символы запишутся в конец
+    при повторного считывания из file1 начнут считываться новые символы
+    (например, если их там нет, то на кол-во считанных укажет возвращаемое значение read)
+    */
+
+    char *new_string = "abcdefg";
+    if ( write( file2_des, new_string, 9) == -1 )
+    {
+        fprintf ( stderr, "2.Не удалось записать строку в файл\n" );
+        exit (1);
+    }
+    //Попробуем что-то считать с file1
+    char test_buffer[BUF_SIZE];
+    int sym_count = read ( file1_des, test_buffer, 5 );
+    printf ( "Количество считанных символов read после основного прочтения: %d ", sym_count);//получили 0 чтд
+
+
+    
+
+
     close(file1_des);
     close(file2_des);
 
+    free(buffer);
     return 0;
 }
