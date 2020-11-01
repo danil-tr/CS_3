@@ -1,108 +1,88 @@
 /*
-Работа с файлами: Запись в файл строку с клавиатуры.
-Создание двух файлов и работа уже с существующим
-argv[1] передаем имя файла
+3.1 Копирование и чтение инфармации файла 
+передаем в консоли названия двух файлов
+первый - файл, куда запишем строку
+второй - файл, куда скопируем строку из первого
 */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 #include <assert.h>
-
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/sendfile.h>
 #include <fcntl.h>
 #include <unistd.h>
 
-const int SIZE = 1000;
+const int SIZE = 20;
+const int BUF_SIZE = 100;
 
 /*
-Функция для считывания строки с клавиатуры. Вовзращает указатель на строку.
+Создадает файл с возможностью записи.
 */
-
-char* Input(int *length)
+int fileCreate ( char *file_path )
 {
-    int MAX_SIZE = 10;
-    int cur_length = 0;
-    *length = 0;
+    mode_t mode = S_IRUSR | S_IWUSR| S_IRGRP | S_IWGRP | S_IROTH;
+    int file_flags = O_WRONLY | O_CREAT;
 
-    char* buffer = (char *) calloc(MAX_SIZE, sizeof(char));
+    int file_des = open ( file_path, file_flags, mode );
 
-    while ( scanf("%10[^\n]%n", buffer + *length, &cur_length) != 0 )
-    {   
-        scanf ("%*1[\n]");
-        *length += cur_length;
-
-        if ( *length > MAX_SIZE/2 )
-        {
-            MAX_SIZE *= 2;
-
-            buffer = (char*) realloc(buffer, MAX_SIZE * sizeof(char) );
-        }
+    if ( file_des == -1 )
+    {
+        fprintf ( stderr, "Не удалось получить файловый дескриптор\n" );
+        exit (1);
     }
-    *(buffer + *length) = '\0';
 
-    return buffer;
-}
-
-/*
-Вводим строго два аргумента в консоли
-*/
-void checkArgc(int a){
-    assert (a == 2);
+    return file_des;
 }
 
 
 int main(int argc, char* argv[])
 {   
-    checkArgc(argc);
+    struct stat file_stat;
 
-    /*Блок работы с консоль*/
-    int string_length = 0;
-    char *str = NULL;
+    char *file1_name = argv[1];
+    char *file2_name = argv[2];
 
-    printf("Enter the string that you want to write to the file...\n");
-    str = Input(&string_length);
-    printf("String: %s, length: %d\n", str, string_length);
-    
-    /*Блок работы с файлами*/
 
-    //Путевое имя файла
-    char *file_path = argv[1];
+    int file1_des = fileCreate ( file1_name );
+    int file2_des = fileCreate ( file2_name );
 
-    
-    mode_t mode = S_IRUSR | S_IWUSR| S_IRGRP | S_IWGRP | S_IROTH;//доступ на чтение и запись
-    /*
-    O_TRUNC приводит к очистке существующего файла. Данные, записываемые в файл,
-     замещают предыдущее содержимое файла.
-    O_APPEND приводит к открытию файла в режиме добавления. Данные, записываемые в
-    файл, добавляются в его конец.
-    O_CREAT означает создание нового файла. Если указанное имя соответствует
-    несуществующему файлу, он будет создан.
-    */
-    int file_flags = O_WRONLY | O_CREAT | O_APPEND;
+    //Создадим файл и запишем туда строку
+    char str[] = "Computer Science"; 
 
-    int file_des = open ( file_path, file_flags, mode );
-    if ( file_des == -1 )
+    if ( write( file1_des, str, 17) == -1 )
     {
-        fprintf(stderr, "Не удалось получить файловый дескриптор\n");
-        exit(1);
+        fprintf ( stderr, "Не удалось записать строку в файл\n" );
+        exit (1);
     }
-    if( write(file_des, str, string_length) == -1 )
+
+    printf ( "Запись строки в файл %s c помощью write прошла успешно.\n", file1_name );
+    close ( file1_des ); //откроем далее только для записи
+
+    file1_des = open ( file1_name, O_RDONLY );
+    if ( file1_des == -1 )
     {
-        fprintf(stderr, "Не удалось записать строку в файл\n");
-        exit(1);
+        fprintf ( stderr, "Не удалось получить файловый дескриптор\n" );
+        exit (1);
     }
-    printf("Запись в файл %s c помощью write прошла успешно.\n", argv[1]);
+    //Заполним структуру информации о 1 файле (необходим размер первого файла)
+    if ( fstat ( file1_des, &file_stat ) == -1 )
+    {
+        assert ("fstat file error");
+    }
 
-    const char f_string[] = "dprintf as write\n";
+    off_t offset = 0; //считываем file1 сначала;
+    if ( sendfile ( file2_des, file1_des, &offset, file_stat.st_size ) == -1 )
+    {
+        assert ("sendfile error");
+    }
 
-    printf("\n*Запись с помощью dprintf строки: %s*\n", f_string);
-    dprintf(file_des, f_string);
+    printf ( "Пересылка из файла %s в файл %s прошла успешно.\n", file1_name, file2_name );
 
-    close(file_des);
-    free(str);
+    close(file1_des);
+    close(file2_des);
 
     return 0;
 }
