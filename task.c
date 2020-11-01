@@ -1,11 +1,10 @@
 /*
-3.1 Копирование и чтение инфармации файла 
-передаем в консоли названия двух файлов
-первый - файл, куда запишем строку
-второй - файл, куда скопируем строку из первого
-
-записывается /00 в конце?
-valgrind ./task a.txt b.txt - проверка на утекчки памяти
+3.2 Продемонстрируем отличия pread и pwrite:
+Pread() works just like read() but reads from the specified position
+in the file without modifying the file pointer.
+Pwrite() не изменяется позицию указателя в файле при записи.
++ возвращают кол-во записанных/считанных байт, а не символов.
+(в нашем случае не измениттся, тк sizeof(char) = 1)
 */
 
 #include <stdio.h>
@@ -44,6 +43,8 @@ int main(int argc, char* argv[])
 {   
     struct stat file_stat;
 
+    off_t offset = 0; //смещение равно 0 для pwrite pread
+
     char *file1_name = argv[1];
     char *file2_name = argv[2];
 
@@ -54,7 +55,7 @@ int main(int argc, char* argv[])
     //Создадим файл и запишем туда строку
     char str[] = "Computer Science"; 
 
-    if ( write( file1_des, str, 17) == -1 )
+    if ( pwrite( file1_des, str, 17*sizeof(char), offset) == -1 )
     {
         fprintf ( stderr, "1.Не удалось записать строку в файл\n" );
         exit (1);
@@ -79,11 +80,11 @@ int main(int argc, char* argv[])
     
     char *buffer = (char *) calloc ( size + 1, sizeof(char) );//массив для записи с файла.
 
-    if ( read( file1_des, buffer, size ) != size )
+    if ( pread( file1_des, buffer, size*sizeof(char), offset ) != size )
     {
         assert ( "Impossible to read" );
     }
-    if ( write( file2_des, buffer, size) == -1 )
+    if ( pwrite( file2_des, buffer, size*sizeof(char), offset ) == -1 )
     {
         fprintf ( stderr, "2.Не удалось записать строку в файл\n" );
         exit (1);
@@ -92,13 +93,12 @@ int main(int argc, char* argv[])
     printf ( "Пересылка из файла %s в файл %s прошла успешно.\n", file1_name, file2_name );
 
     /*
-    Продемонстрируем, что read и write смещают указатели при файловой обработке:
-    при повторной записи в file2 символы запишутся в конец
-    при повторного считывания из file1 начнут считываться новые символы
-    (например, если их там нет, то на кол-во считанных укажет возвращаемое значение read)
+    Продемонстрируем, что pread и pwrite смещают указатели при файловой обработке:
+    read может считать с начала файла все символы
+    write запишет строку в начало файла (с заменой)
     */
 
-    char *new_string = "abcdefg";
+    char *new_string = "abcdefg"; 
     if ( write( file2_des, new_string, 9) == -1 )
     {
         fprintf ( stderr, "2.Не удалось записать строку в файл\n" );
@@ -106,8 +106,8 @@ int main(int argc, char* argv[])
     }
     //Попробуем что-то считать с file1
     char test_buffer[BUF_SIZE];
-    int sym_count = read ( file1_des, test_buffer, 5 );
-    printf ( "Количество считанных символов read после основного прочтения: %d ", sym_count);//получили 0 чтд
+    int sym_count = read ( file1_des, test_buffer, size );
+    printf ( "Количество считанных символов read после основного прочтения: %d, всего в файле было: %d;\n", sym_count, size);//получили sym_count = size чтд
 
 
     
