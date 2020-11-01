@@ -96,6 +96,11 @@ int main(int argc, char* argv[])
     }
     printf("Запись в файл %s c помощью write прошла успешно.\n", argv[1]);
 
+    const char f_string[] = "dprintf as write\n";
+
+    printf("\n*Запись с помощью dprintf строки: %s*\n", f_string);
+    dprintf(file_des, f_string);
+
     close(file_des);
     free(str);
 
