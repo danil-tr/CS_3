@@ -1,11 +1,13 @@
 /*
-3.1 Копирование и чтение информации файла 
-передаем в консоли названия двух файлов
-первый - файл, куда запишем строку
-второй - файл, куда скопируем строку из первого
+4.
 
-записывается /00 в конце?
-valgrind ./task a.txt b.txt - проверка на утекчки памяти
+Недостаток utime и utimes: имеют секундную и микросекундную точность
+соответственно.
+
+futimens - обновление временных меток файла
+
+futimens не удается обновить метки со всеми правами доступа??
+
 */
 
 #include <stdio.h>
@@ -17,16 +19,19 @@ valgrind ./task a.txt b.txt - проверка на утекчки памяти
 #include <sys/sendfile.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <time.h>
 
-const int BUF_SIZE = 6;
+
+const int SIZE = 200;
+
 
 /*
-Создадает файл с возможностью записи.
+Создадает файл с возможностью записи и чтения только для владельца.
 */
 int fileCreate ( char *file_path )
 {
-    mode_t mode = S_IRUSR | S_IWUSR| S_IRGRP | S_IWGRP | S_IROTH;
-    int file_flags = O_WRONLY | O_CREAT;
+    mode_t mode = S_IRWXU;
+    int file_flags = O_WRONLY | O_CREAT ;
 
     int file_des = open ( file_path, file_flags, mode );
 
@@ -39,83 +44,86 @@ int fileCreate ( char *file_path )
     return file_des;
 }
 
+/*
+Создаем структуру и записываем в нее информацию. Находим ошибку если
+файл не существует
+*/
+void fstatCreate(int file_des, struct stat *buf, int line){
+    int stat_status = -1;
+
+    stat_status = fstat( file_des, buf );
+
+    if (stat_status == -1)
+    {
+        fprintf (stderr, "There is no this file in the directory,"
+                         "error on line %d\n", line);
+        exit (1);
+    }
+}
+
+char* formatDate ( char* str, time_t val ) 
+{
+        strftime ( str, 36, "%d.%m.%Y %H:%M:%S", localtime(&val) );
+        return str;
+}
+/*
+Вывод информации о файле
+*/
+
+void printInfo ( struct stat file_stat, char *buffer, char *file_name )
+{
+    printf ( "Information for file %s \n", file_name );
+    printf ("-------------------------------------\n");
+    printf ("File size: %ld bytes \n", file_stat.st_size );
+    printf ("Access : %s\n", formatDate ( buffer, file_stat.st_atime ) );
+    printf ("Modify : %s\n", formatDate ( buffer, file_stat.st_mtime ) );
+    printf ("Владелец: %ld\n", file_stat.st_dev );
+    printf ("Время изменения прав : %s\n", formatDate ( buffer, file_stat.st_ctime ) );
+
+} 
+
 
 int main(int argc, char* argv[])
 {   
+    char buffer[SIZE];
+
     struct stat file_stat;
 
     char *file1_name = argv[1];
-    char *file2_name = argv[2];
-
-
     int file1_des = fileCreate ( file1_name );
-    int file2_des = fileCreate ( file2_name );
 
     //Создадим файл и запишем туда строку
-    char str[] = "Computer Science"; 
+    char *str = "Computer Science"; 
 
-    if ( write( file1_des, str, 17) == -1 )
+    if ( write( file1_des, str, 17 ) == -1 )
     {
         fprintf ( stderr, "1.Не удалось записать строку в файл\n" );
         exit (1);
     }
 
     printf ( "Запись строки в файл %s c помощью write прошла успешно.\n", file1_name );
-    close ( file1_des ); //откроем далее только для записи
+    fstatCreate ( file1_des, &file_stat, __LINE__ );
 
-    file1_des = open ( file1_name, O_RDONLY );
-    if ( file1_des == -1 )
-    {
-        fprintf ( stderr, "Не удалось получить файловый дескриптор\n" );
-        exit (1);
-    }
-    //Заполним структуру информации о 1 файле (необходим размер первого файла)
-    if ( fstat ( file1_des, &file_stat ) == -1 )
-    {
-        assert ("fstat file error\n");
-    }
-
-    int size = file_stat.st_size;
+    printInfo ( file_stat, buffer, file1_name );
     
-    char *buffer = (char *) calloc ( size + 1, sizeof(char) );//массив для записи с файла.
+    //Новые права:
+    mode_t new_mode = S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR |S_IRGRP | S_IWGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IWOTH | S_IXOTH;
 
-    if ( read( file1_des, buffer, size ) != size )
+    if ( fchmod ( file1_des, new_mode ) == -1 )
     {
-        assert ( "Impossible to read" );
-    }
-    if ( write( file2_des, buffer, size) == -1 )
-    {
-        fprintf ( stderr, "2.Не удалось записать строку в файл\n" );
+        fprintf ( stderr, "Не удалось изменить права доступа\n" );
         exit (1);
     }
+    printf ( "Права успешно изменены\n" );
+    // Обновление временных меток 
+    const struct timespec times[2];
 
-    printf ( "Пересылка из файла %s в файл %s прошла успешно.\n", file1_name, file2_name );
-
-    /*
-    Продемонстрируем, что read и write смещают указатели при файловой обработке:
-    при повторной записи в file2 символы запишутся в конец
-    при повторного считывания из file1 начнут считываться новые символы
-    (например, если их там нет, то на кол-во считанных укажет возвращаемое значение read)
-    */
-
-    char *new_string = "abcdefg";
-    if ( write( file2_des, new_string, 9) == -1 )
+    if ( futimens ( file1_des, times ) == -1 )
     {
-        fprintf ( stderr, "2.Не удалось записать строку в файл\n" );
-        exit (1);
+         fprintf ( stderr, "Не удалось обновить временные метки\n" );
+         exit (1);
     }
-    //Попробуем что-то считать с file1
-    char test_buffer[BUF_SIZE];
-    int sym_count = read ( file1_des, test_buffer, 5 );
-    printf ( "Количество считанных символов read после основного прочтения: %d ", sym_count);//получили 0 чтд
-
-
-    
-
 
     close(file1_des);
-    close(file2_des);
-
-    free(buffer);
     return 0;
 }
