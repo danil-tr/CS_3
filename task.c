@@ -1,129 +1,94 @@
 /*
-4.
+6. Вывод содержимого каталога.
 
-Недостаток utime и utimes: имеют секундную и микросекундную точность
-соответственно.
-
-futimens - обновление временных меток файла
-
-futimens не удается обновить метки со всеми правами доступа??
-
+путь к каталогу в виде ./aa/bbb/
+аргумент строки - имя каталога
 */
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include <sys/types.h>
+#include <dirent.h>
 #include <sys/stat.h>
-#include <sys/sendfile.h>
-#include <fcntl.h>
+#include <sys/types.h>
 #include <unistd.h>
-#include <time.h>
 
+#include <limits.h>
 
-const int SIZE = 200;
-
-
-/*
-Создадает файл с возможностью записи и чтения только для владельца.
-*/
-int fileCreate ( char *file_path )
+const char* File_type ( const char* path )
 {
-    mode_t mode = S_IRWXU;
-    int file_flags = O_WRONLY | O_CREAT ;
+struct stat st;
+lstat(path, &st);
+if (S_ISLNK(st.st_mode))
+return "symbolic link";
 
-    int file_des = open ( file_path, file_flags, mode );
+else if ( S_ISDIR(st.st_mode) )
+return "directory";
 
-    if ( file_des == -1 )
-    {
-        fprintf ( stderr, "Не удалось получить файловый дескриптор\n" );
-        exit (1);
-    }
+else if ( S_ISCHR(st.st_mode) )
+return "character device";
 
-    return file_des;
+else if ( S_ISBLK(st.st_mode) )
+return "block device";
+
+else if ( S_ISFIFO(st.st_mode) )
+return "fifo";
+
+else if ( S_ISSOCK(st.st_mode) )
+return "socket";
+
+else if ( S_ISREG(st.st_mode) )
+return "regular file";
+
+else
+assert ( "unknown file's type" );
 }
-
-/*
-Создаем структуру и записываем в нее информацию. Находим ошибку если
-файл не существует
-*/
-void fstatCreate(int file_des, struct stat *buf, int line){
-    int stat_status = -1;
-
-    stat_status = fstat( file_des, buf );
-
-    if (stat_status == -1)
-    {
-        fprintf (stderr, "There is no this file in the directory,"
-                         "error on line %d\n", line);
-        exit (1);
-    }
-}
-
-char* formatDate ( char* str, time_t val ) 
-{
-        strftime ( str, 36, "%d.%m.%Y %H:%M:%S", localtime(&val) );
-        return str;
-}
-/*
-Вывод информации о файле
-*/
-
-void printInfo ( struct stat file_stat, char *buffer, char *file_name )
-{
-    printf ( "Information for file %s \n", file_name );
-    printf ("-------------------------------------\n");
-    printf ("File size: %ld bytes \n", file_stat.st_size );
-    printf ("Access : %s\n", formatDate ( buffer, file_stat.st_atime ) );
-    printf ("Modify : %s\n", formatDate ( buffer, file_stat.st_mtime ) );
-    printf ("Владелец: %ld\n", file_stat.st_dev );
-    printf ("Время изменения прав : %s\n", formatDate ( buffer, file_stat.st_ctime ) );
-
-} 
-
 
 int main(int argc, char* argv[])
 {   
-    char buffer[SIZE];
-
-    struct stat file_stat;
-
-    char *file1_name = argv[1];
-    int file1_des = fileCreate ( file1_name );
-
-    //Создадим файл и запишем туда строку
-    char *str = "Computer Science"; 
-
-    if ( write( file1_des, str, 17 ) == -1 )
-    {
-        fprintf ( stderr, "1.Не удалось записать строку в файл\n" );
-        exit (1);
-    }
-
-    printf ( "Запись строки в файл %s c помощью write прошла успешно.\n", file1_name );
-    fstatCreate ( file1_des, &file_stat, __LINE__ );
-
-    printInfo ( file_stat, buffer, file1_name );
+    char *dir_path; //строка с названием файла
     
-    //Новые права:
-    mode_t new_mode = S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR |S_IRGRP | S_IWGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IWOTH | S_IXOTH;
-
-    if ( fchmod ( file1_des, new_mode ) == -1 )
+    char entry_path[PATH_MAX - 1];//поместим имя файла с ограничением, установленным системой
+    if ( argc >= 2 )
     {
-        fprintf ( stderr, "Не удалось изменить права доступа\n" );
-        exit (1);
-    }
-    printf ( "Права успешно изменены\n" );
-    // Обновление временных меток 
-    const struct timespec times[2];
-
-    if ( futimens ( file1_des, times ) == -1 )
+        dir_path = argv[1];
+    } 
+    else
     {
-         fprintf ( stderr, "Не удалось обновить временные метки\n" );
-         exit (1);
+        dir_path = ".";//current direction
     }
+    
+    /* Скопируем каталог и добавим недостающую часть */
 
-    close(file1_des);
+    size_t len_path = strlen ( dir_path );
+
+    strncpy ( entry_path, dir_path, len_path );
+    
+    if ( entry_path[len_path - 1] != '/' )
+    {
+        entry_path[len_path] = '/';
+        entry_path[len_path + 1] = '\0';
+        len_path++;
+    }
+    
+    DIR *dir = opendir ( dir_path );
+    assert ( dir != NULL );
+
+    struct dirent *entry; //указатель на структуру, которая хранит данные после readdir
+
+    while ( ( entry = readdir (dir) ) != NULL )
+    {
+        const char *type;
+
+        char *dir_part = entry->d_name;
+        size_t dir_part_len = strlen ( dir_part );
+
+        strncpy ( entry_path + len_path, dir_part, dir_part_len );
+        type = File_type ( entry_path );
+        
+        printf ( "%-18s: %s\n", type, entry_path );
+    }
+    closedir ( dir );
+    
     return 0;
 }
