@@ -1,6 +1,5 @@
-
 /*
-6. Вывод содержимого каталога.
+6.1 Вывод содержимого каталога.
 
 путь к каталогу в виде ./aa/bbb/
 аргумент строки - имя каталога
@@ -13,13 +12,13 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-
+#include <stdlib.h>
 #include <limits.h>
 
-const char* File_type ( const char* path )
+const char* File_type ( int fd_dir, const char* path )
 {
 struct stat st;
-lstat(path, &st);
+fstatat ( fd_dir, path, &st, 0 );
 if (S_ISLNK(st.st_mode))
 return "symbolic link";
 
@@ -43,26 +42,32 @@ return "regular file";
 
 else
 assert ( "unknown file's type" );
+
 }
+
+
 
 int main(int argc, char* argv[])
 {   
-    char *dir_path; //строка с названием файла
+    char entry_path[PATH_MAX - 1] = {0};
+    char *dir_path;
+    struct dirent *entry;
     
-    char entry_path[PATH_MAX - 1];//поместим имя файла с ограничением, установленным системой
-    if ( argc >= 2 )
+    if ( argc == 2 )
     {
         dir_path = argv[1];
     } 
+    else if ( argc == 1 )
+    {
+        dir_path = ".";
+    }
     else
     {
-        dir_path = ".";//current direction
+        fprintf ( stderr, "argc error" );
+        exit (1);
     }
     
-    /* Скопируем каталог и добавим недостающую часть */
-
     size_t len_path = strlen ( dir_path );
-
     strncpy ( entry_path, dir_path, len_path );
     
     if ( entry_path[len_path - 1] != '/' )
@@ -71,15 +76,16 @@ int main(int argc, char* argv[])
         entry_path[len_path + 1] = '\0';
         len_path++;
     }
-    
+
     DIR *dir = opendir ( dir_path );
     assert ( dir != NULL );
 
-    struct dirent *entry; //указатель на структуру, которая хранит данные после readdir
+    int fd_dir = dirfd ( dir );
+    assert ( fd_dir != -1 );
 
     const char clear_part[PATH_MAX - 1] = {0};
 
-    while ( ( entry = readdir (dir) ) != NULL )
+     while ( ( entry = readdir (dir) ) != NULL )
     {
         const char *type;
 
@@ -87,12 +93,17 @@ int main(int argc, char* argv[])
         size_t dir_part_len = strlen ( dir_part );
 
         strncpy ( entry_path + len_path, dir_part, dir_part_len );
-        type = File_type ( entry_path );
+
+        type = File_type ( fd_dir, entry_path );
         printf ( "%-18s: %s\n", type, entry_path );
 
         strncpy ( entry_path + len_path, clear_part, dir_part_len );
-    }
-    closedir ( dir );
-    
+        
+    }   
+
+
+    close( fd_dir );		
+    closedir( dir );
+
     return 0;
 }
