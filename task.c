@@ -1,3 +1,4 @@
+
 /*
 6. Вывод содержимого каталога.
 
@@ -76,6 +77,8 @@ int main(int argc, char* argv[])
 
     struct dirent *entry; //указатель на структуру, которая хранит данные после readdir
 
+    const char clear_part[PATH_MAX - 1] = {0};
+
     while ( ( entry = readdir (dir) ) != NULL )
     {
         const char *type;
@@ -85,8 +88,9 @@ int main(int argc, char* argv[])
 
         strncpy ( entry_path + len_path, dir_part, dir_part_len );
         type = File_type ( entry_path );
-        
         printf ( "%-18s: %s\n", type, entry_path );
+
+        strncpy ( entry_path + len_path, clear_part, dir_part_len );
     }
     closedir ( dir );
     
