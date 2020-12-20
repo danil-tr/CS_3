@@ -1,14 +1,11 @@
-CC = gcc
-
-CFLAGS = -c -Wall -Wextra
+CFLAGS = -Wall -Wextra
 
 all: task
 
-main: task.o 
-	$(CC) task.c -lm -o task
-
-main.o: task.c
-	$(CC) $(CFLAGS) task.c
+task: task.c 
+	$(CC) $(CFLAGS) task.c -lm -o task
 
 clean:
-	rm -rf *.o task
+	rm -rf task
+
+.PHONY: all clean
