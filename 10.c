@@ -15,7 +15,7 @@ int main(int argc, char *argv[])
 {
 	if (argc != 2) 
     {
-		fprintf ( stderr, "Usage: %s [dir]\n", argv[0]);
+		fprintf ( stderr, "Usage: %s dir\n", argv[0]);
 		return -1;
 	}
 
@@ -29,7 +29,7 @@ int main(int argc, char *argv[])
         return -1; 
     }
 
-	if ( ( entry = inotify_add_watch(fd, ".", IN_MODIFY | IN_CREATE | IN_DELETE) ) < 0 )
+	if ( ( entry = inotify_add_watch(fd, argv[1], IN_MODIFY | IN_CREATE | IN_DELETE) ) < 0 )
     {
         perror ( "Failed to inotify" );
         close (fd);
@@ -57,25 +57,25 @@ int main(int argc, char *argv[])
                 {
 					if (event->mask & IN_ISDIR) 
 						printf("Directory %s was created\n", event->name);
-                    else 
+                    else 	
 						printf("File %s was created\n", event->name);
 				} 
                 else if (event->mask & IN_DELETE) 
                 {
 					if (event->mask & IN_ISDIR) 
 						printf("Directory %s was deleted\n", event->name);	
-                    else
+                	else
 						printf("The file %s was deleted\n", event->name);
 				} 
                 else if (event->mask & IN_MODIFY) 
                 {
 					if (event->mask & IN_ISDIR) 
 						printf("Directory %s was modified\n", event->name);
-				    else 
+					else 
 						printf("File %s was modified\n", event->name);
 				}
 			}
-			i += buf_size + event->len;
+			i += sizeof (struct inotify_event )+ event->len;
 		}
 	}
 	if (inotify_rm_watch (fd, entry) < 0)  //удаляем наблюдение
