@@ -6,7 +6,9 @@
 
 futimens - обновление временных меток файла
 
-futimens не удается обновить метки со всеми правами доступа??
+utimens:
+Если pathname указывает на символьную ссылку, 
+то обновляются временные метки ссылки, а не файла, на который она ссылается.
 
 */
 
@@ -22,44 +24,7 @@ futimens не удается обновить метки со всеми пра�
 #include <time.h>
 
 
-const int SIZE = 200;
-
-
-/*
-Создадает файл с возможностью записи и чтения только для владельца.
-*/
-int fileCreate ( char *file_path )
-{
-    mode_t mode = S_IRWXU;
-    int file_flags = O_WRONLY | O_CREAT ;
-
-    int file_des = open ( file_path, file_flags, mode );
-
-    if ( file_des == -1 )
-    {
-        fprintf ( stderr, "Не удалось получить файловый дескриптор\n" );
-        exit (1);
-    }
-
-    return file_des;
-}
-
-/*
-Создаем структуру и записываем в нее информацию. Находим ошибку если
-файл не существует
-*/
-void fstatCreate(int file_des, struct stat *buf, int line){
-    int stat_status = -1;
-
-    stat_status = fstat( file_des, buf );
-
-    if (stat_status == -1)
-    {
-        fprintf (stderr, "There is no this file in the directory,"
-                         "error on line %d\n", line);
-        exit (1);
-    }
-}
+const int SIZE = (2<<9);
 
 char* formatDate ( char* str, time_t val ) 
 {
@@ -70,60 +35,60 @@ char* formatDate ( char* str, time_t val )
 Вывод информации о файле
 */
 
-void printInfo ( struct stat file_stat, char *buffer, char *file_name )
-{
-    printf ( "Information for file %s \n", file_name );
-    printf ("-------------------------------------\n");
-    printf ("File size: %ld bytes \n", file_stat.st_size );
-    printf ("Access : %s\n", formatDate ( buffer, file_stat.st_atime ) );
-    printf ("Modify : %s\n", formatDate ( buffer, file_stat.st_mtime ) );
-    printf ("Владелец: %ld\n", file_stat.st_dev );
-    printf ("Время изменения прав : %s\n", formatDate ( buffer, file_stat.st_ctime ) );
-
-} 
-
-
 int main(int argc, char* argv[])
 {   
-    char buffer[SIZE];
-
-    struct stat file_stat;
-
-    char *file1_name = argv[1];
-    int file1_des = fileCreate ( file1_name );
-
-    //Создадим файл и запишем туда строку
-    char *str = "Computer Science"; 
-
-    if ( write( file1_des, str, 17 ) == -1 )
+    if (argc != 2)
     {
-        fprintf ( stderr, "1.Не удалось записать строку в файл\n" );
+        fprintf ( stderr, "Usage: %s file_name\n", argv[0] );
+        return 1;
+    }   
+
+    char *path = argv[1];
+
+    int file_des = open ( path, O_RDONLY | O_CREAT, 0600 );
+
+    if ( file_des == -1 )
+    {
+        perror ( "Failed to get file_des" );
         return -1;
     }
 
-    printf ( "Запись строки в файл %s c помощью write прошла успешно.\n", file1_name );
-    fstatCreate ( file1_des, &file_stat, __LINE__ );
+    struct stat buf_info;
 
-    printInfo ( file_stat, buffer, file1_name );
-    
-    //Новые права:
-    mode_t new_mode = S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR |S_IRGRP | S_IWGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IWOTH | S_IXOTH;
-
-    if ( fchmod ( file1_des, new_mode ) == -1 )
+    if ( fstat ( file_des, &buf_info ) == -1 )
     {
-        fprintf ( stderr, "Не удалось изменить права доступа\n" );
-        exit (1);
+        perror ( "Failed to get fstat" );
+        if ( close(file_des) == -1 )
+            perror ( "Failed to close des" );
+        return -1;
     }
-    printf ( "Права успешно изменены\n" );
+
+    mode_t new_mode = S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR |S_IRGRP;
+
+    if ( fchmod ( file_des, new_mode ) == -1 )
+    {
+        perror ( "Failed to change mode" );
+        if ( close(file_des) == -1 )
+            perror ( "Failed to close des" );
+        return -1;
+    }
+
     // Обновление временных меток 
     const struct timespec times[2];
 
-    if ( futimens ( file1_des, times ) == -1 )
+    if ( futimens ( file_des, times ) == -1 )
     {
-         fprintf ( stderr, "Не удалось обновить временные метки\n" );
-         exit (1);
+        perror ( "Failed futimens " );
+        if ( close(file_des) == -1 )
+            perror ( "Failed to close des" );
+        return -1;
     }
 
-    close(file1_des);
+    char buffer1[SIZE];
+    char buffer2[SIZE];
+    printf ("atime: %s", formatDate (buffer1, times->tv_sec) );
+    printf ("mtime: %s", formatDate (buffer2, times->tv_sec) );
+    close(file_des);
+
     return 0;
 }
