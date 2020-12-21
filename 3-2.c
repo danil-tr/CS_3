@@ -44,9 +44,11 @@ int main ( int argc, char* argv[] )
 
     uint8_t buffer[buf_size];//запишем файл в буфер
     ssize_t bytes_read = 0;
+    off_t offset = 0;
+    size_t bytes_left = (size_t) buf_size;
     while ( bytes_read < ((ssize_t) buf_size) ) 
     {
-        ssize_t res = pread ( src_des, buffer, (size_t) buf_size, (off_t) bytes_read );
+        ssize_t res = pread ( src_des, buffer + bytes_read, bytes_left, offset );
         if ( res == 0 )
         {
             if ( fsync ( src_des ) == -1 )
@@ -72,6 +74,8 @@ int main ( int argc, char* argv[] )
             }
         }
         bytes_read += res;
+        offset += (off_t) res;
+        bytes_left -= res;
     }
 
     mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH;
@@ -84,9 +88,11 @@ int main ( int argc, char* argv[] )
     }
 
     ssize_t bytes_written = 0;
+    offset = 0;
+    bytes_left = (size_t) bytes_read;
     while ( bytes_written < bytes_read ) 
     {
-        ssize_t res = pwrite ( dest_des, buffer, (size_t) bytes_read, (off_t) bytes_written);
+        ssize_t res = pwrite ( dest_des, buffer + bytes_written, (size_t) bytes_left, (off_t) offset);
         if ( res == -1 )  
         {
             perror ( "Failed to use write()" );
@@ -95,6 +101,8 @@ int main ( int argc, char* argv[] )
             return -1; 
         }
         bytes_written += res;
+        offset += res;
+        bytes_left -= res;
     }
 
     if ( fsync ( dest_des ) == -1 )
