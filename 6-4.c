@@ -1,12 +1,14 @@
 
 /*
 6.4
+
+переделать: рекурсивный обход с сохранением 
+большого кол-ва строк
 */
 #include <dirent.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-#include <assert.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -43,34 +45,32 @@ char* dType ( unsigned char type )
         return  "unkwn";
 }
 
-char*  sType ( mode_t type )
+const char* sType ( mode_t type )
 {
-    mode_t file_type = type & S_IFMT;
-    if ( file_type == S_IFLNK ) 
-        return "s.lnk";
+    if (S_ISLNK(type))
+        return "symbolic link";
 
-    else if ( file_type == S_IFDIR )
-        return "dir";
+    else if ( S_ISDIR(type) )
+        return "directory";
 
-    else if ( file_type == S_IFCHR )
-        return "ch.dev";
+    else if ( S_ISCHR(type) )
+        return "character device";
 
-    else if ( file_type == S_IFBLK )
-        return "block dev";
+    else if ( S_ISBLK(type) )
+        return "block device";
 
-    else if ( file_type == S_IFIFO )
+    else if ( S_ISFIFO(type) )
         return "fifo";
 
-    else if ( file_type == S_IFSOCK )
+    else if ( S_ISSOCK(type) )
         return "socket";
 
-    else if ( file_type == S_IFREG )
-        return "reg";
+    else if ( S_ISREG(type) )
+        return "regular file";
 
     else
-        return  "unkwn";
+        return "unknown";
 }
-
 
 
 
@@ -84,23 +84,20 @@ int view_dir( const char *name, int level )
     if ( (dir = opendir(name)) == NULL ) 
         {
             perror ( "Failed to open dir." );
-            flag = -1;
+            return -1;
         }
-
-    int fd_dir = dirfd ( dir );
-    if ( fd_dir == -1 )
-    {
-        perror ( "Failed to get fd_dir" );
-        flag = -1;
-    }
 
     while ( ((entry = readdir(dir)) != NULL ) && !flag ) 
     {   
         if ( entry->d_type == DT_UNKNOWN )
-        {
-            if ( fstatat( fd_dir, entry -> d_name, &buf_info, AT_SYMLINK_NOFOLLOW ) == -1 )//вернуть информацию о символьной ссылки, а не разыменовать ее
+        {   
+            char path[PATH_MAX] = {0};
+            snprintf (path, sizeof(path), "%s/%s", name, entry->d_name);
+
+            if ( lstat(path, &buf_info) == -1 )
             {
-                perror("Failed to get stat");
+                if ( closedir ( dir ) == -1 )
+                    perror ("Failed to close dir");
                 return -1;
             }
 
@@ -131,12 +128,11 @@ int view_dir( const char *name, int level )
             printf("%*s| %s (%s)\n", level, "", entry->d_name, dType ( entry->d_type ));   
     }
 
-    close ( fd_dir );
     closedir ( dir );
-    return flag;
+    return 0;
 }
 
-int main( int argc, char* argv[] )
+int main ( int argc, char* argv[] )
 {
 
     if ( argc != 2 ) 
@@ -147,7 +143,11 @@ int main( int argc, char* argv[] )
 
     const char *path = argv[1];
 
-    int res = view_dir ( path, 0);
+    if ( view_dir ( path, 0) )
+    {
+        fprintf ( stderr, "Failed to view dir" );
+        return -1;
+    }
     
-    return res;
+    return 0;
 }   

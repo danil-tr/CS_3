@@ -34,7 +34,7 @@ int main( int argc, char* argv[] )
     if ( statvfs ( path, &buf ) == -1 )
     {
         perror ( "statvfs error on line\n");
-        exit(1);
+        return -1;
     }
     unsigned long frag_size = buf.f_frsize;
     unsigned long fsys_size = frag_size * ( buf.f_blocks );
