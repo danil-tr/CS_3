@@ -20,49 +20,49 @@ const char* sType ( mode_t type )
     if (S_ISLNK(type))
         return "symbolic link";
 
-    else if ( S_ISDIR(type) )
+    if ( S_ISDIR(type) )
         return "directory";
 
-    else if ( S_ISCHR(type) )
+    if ( S_ISCHR(type) )
         return "character device";
 
-    else if ( S_ISBLK(type) )
+    if ( S_ISBLK(type) )
         return "block device";
 
-    else if ( S_ISFIFO(type) )
+    if ( S_ISFIFO(type) )
         return "fifo";
 
-    else if ( S_ISSOCK(type) )
+    if ( S_ISSOCK(type) )
         return "socket";
 
-    else if ( S_ISREG(type) )
+    if ( S_ISREG(type) )
         return "regular file";
 
     else
         return "unknown";
 }
 
-char* dType ( unsigned char type )
+const char* dType ( unsigned char type )
 {
     if ( type == DT_LNK ) 
         return "s.lnk";
 
-    else if ( type == DT_DIR )
+    if ( type == DT_DIR )
         return "dir";
 
-    else if ( type == DT_CHR )
+    if ( type == DT_CHR )
         return "ch.dev";
 
-    else if ( type == DT_BLK )
+    if ( type == DT_BLK )
         return "block dev";
 
-    else if ( type == DT_FIFO )
+    if ( type == DT_FIFO )
         return "fifo";
 
-    else if ( type == DT_SOCK )
+    if ( type == DT_SOCK )
         return "socket";
 
-    else if ( type == DT_REG )
+    if ( type == DT_REG )
         return "reg";
 
     else
