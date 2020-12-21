@@ -76,7 +76,6 @@ const char* sType ( mode_t type )
 
 int view_dir( const char *name, int level )
 {
-    int flag = 0;
     DIR *dir = NULL; 
     struct dirent *entry = NULL;
     struct stat buf_info;
@@ -87,7 +86,7 @@ int view_dir( const char *name, int level )
             return -1;
         }
 
-    while ( ((entry = readdir(dir)) != NULL ) && !flag ) 
+    while ( (entry = readdir(dir)) != NULL ) 
     {   
         if ( entry->d_type == DT_UNKNOWN )
         {   
